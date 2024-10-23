@@ -56,6 +56,7 @@ def add_correlation_items(df, full_dataset, file_path):
             full_dataset.loc[full_dataset['codice_partecipante'] == part_id, 'Q1_9'].values[0],
             full_dataset.loc[full_dataset['codice_partecipante'] == part_id, 'Q1_10'].values[0]
         ]
+        
 
         df_clean.at[index, 'Avg Art Experience'] = np.mean(val_art_exp_list)
             
