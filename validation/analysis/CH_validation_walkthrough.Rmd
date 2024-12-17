@@ -16,9 +16,9 @@ Here are the step-by-step analyses for the validation of the Cultural Heritage C
 ### **Dichotomization of responses**
 ```{r, message= FALSE}
 library(readxl)
-dati <- read_xlsx('chare_clean.xlsx')
+data <- read_xlsx('chare_clean.xlsx')
 
-items<- subset(dati[c(5:20)])
+items<- subset(data[c(5:20)])
 #recodes responses into dichotomical values
 library(dplyr)
 items <- items %>%
@@ -41,6 +41,8 @@ library(eRm)
 RaschModel <- RM(items)
 pp <- person.parameter(RaschModel)
 ```
+
+
 We can now check the itemfit statistics of our set of items using `itemfit(pp)`
 
 ```{r}
@@ -49,10 +51,41 @@ print(ifit)
 ```
 Based on [Linacre guidelines on response scales](https://www.rasch.org/rmt/rmt83b.htm) for which acceptable values range from 0.6 to 1.4, item C3 appears to potentially distort the Rasch measurement.
 
-Therefore, we re-fit the model by only excluding this item, while keeping the items that have values lower than 0.6, for now.
+#### **Point biserial correlation of the 15 item version**
+At this point we calculate point-biserial correlation for each item to test for item discrimination (compared to the other items in the scale). A significant low correlation indicates that the test item shows different discrimination compared to the other items. 
+```{r}
+#creates matrix by excluding person zero and person perfect individuals
+rmat <- as.matrix(items[-pp[["pers.ex"]],])
+
+calculate_point_biserial <- function(rmat) {
+  n_items <- ncol(rmat)
+  results <- list()
+  
+  for (i in 1:n_items) {
+    idxt <- i
+    idxs <- setdiff(1:n_items, idxt)
+    
+    tpbis <- NPtest(rmat, method = "Tpbis", idxt = idxt, idxs = idxs,seed=123)
+    results[[paste("Item", i)]] <- tpbis
+  }
+  
+  return(results)
+}
+# Perform the point-biserial correlation test for each item
+tpbis_results <- calculate_point_biserial(rmat)
+# Print the results for each item
+for (item in names(tpbis_results)) {
+  cat("\nResults for", item, ":\n")
+  print(tpbis_results[[item]])
+}
+
+```
+We observe that item C3 is the only one showing significant point-biserial correlation, indicating low discrimination.
+
+Based on this and the high MSQ values, we re-fit the model by only excluding this item, while keeping the items that have values lower than 0.6, for now.
 
 ```{r}
-items<- subset(dati[c(5:20)])
+items<- subset(data[c(5:20)])
 #recodes responses into dichotomical values
 library(dplyr)
 items <- items %>%
@@ -71,10 +104,40 @@ print(ifit)
 ```
 Items E1, E2, and E4 overfit (<0.6), this means that these items are less productive for measurement although not degrading. They may produce inflated good reliabilities.
 
-**Therefore, we proceed by excluding the overfitting items and re-fitting the model**
+#### **Point biserial correlation of the 14 item version**
+We re-check for point-biserial correlation.
+```{r}
+#creates matrix by excluding person zero and person perfect individuals
+rmat <- as.matrix(items[-pp[["pers.ex"]],])
+
+calculate_point_biserial <- function(rmat) {
+  n_items <- ncol(rmat)
+  results <- list()
+  
+  for (i in 1:n_items) {
+    idxt <- i
+    idxs <- setdiff(1:n_items, idxt)
+    
+    tpbis <- NPtest(rmat, method = "Tpbis", idxt = idxt, idxs = idxs,seed=123)
+    results[[paste("Item", i)]] <- tpbis
+  }
+  
+  return(results)
+}
+# Perform the point-biserial correlation test for each item
+tpbis_results <- calculate_point_biserial(rmat)
+# Print the results for each item
+for (item in names(tpbis_results)) {
+  cat("\nResults for", item, ":\n")
+  print(tpbis_results[[item]])
+}
+
+```
+Point-biserial correlation is good for all items except C2.
+Given the very low MSQ fit values, **we proceed by excluding the overfitting items and re-fitting the model**
 
 ```{r}
-items<- subset(dati[c(5:20)])
+items<- subset(data[c(5:20)])
 #recodes responses into dichotomical values
 library(dplyr)
 items <- items %>%
@@ -93,14 +156,25 @@ print(ifit)
 ```
 We finally obtained a set of items with satisfying itemfit values. This is confirmed by the infit t-statistics plot where all items are within the -2 and +2 boundaries.
 
+We obtain Item difficulty and Std error to be included in the table:
+
+```{r}
+#the eRm package doesn't have a built in function to calculate this, so we do this by hand.
+#First we obtain item difficulties 
+item_diff<- round(RaschModel$betapar*(-1),3) #betapar is the item easiness; inverting it by *(-1) results in item difficulty.
+#Then we need items standard error
+item_se <- round(RaschModel$se.beta,3)
+```
+
 ```{r echo=FALSE}
 item_ifit_plot <- plotPWmap(RaschModel, pmap = FALSE, imap = TRUE)
 ```
 
-### **Point biserial correlation**
-At this point we calculate point-biserial correlation for each item to test for item discrimination (compared to the other items in the scale). A significant low correlation indicate that the test item shows different discrimination compared to the other items. 
+#### **Point biserial correlations for the 11-item model**
+
 ```{r}
-rmat <- as.matrix(items)
+#creates matrix by excluding person zero and person perfect individuals
+rmat <- as.matrix(items[-pp[["pers.ex"]],])
 
 calculate_point_biserial <- function(rmat) {
   n_items <- ncol(rmat)
@@ -110,7 +184,7 @@ calculate_point_biserial <- function(rmat) {
     idxt <- i
     idxs <- setdiff(1:n_items, idxt)
     
-    tpbis <- NPtest(rmat, method = "Tpbis", idxt = idxt, idxs = idxs)
+    tpbis <- NPtest(rmat, method = "Tpbis", idxt = idxt, idxs = idxs,seed=123)
     results[[paste("Item", i)]] <- tpbis
   }
   
@@ -126,13 +200,36 @@ for (item in names(tpbis_results)) {
 
 ```
 
-Item 8 (C2) shows significant low point-biserial correlation. This indicates that the item does not discriminate as well as the other items, potrentially indicating issues in the item formulation. It could possibly be measuring a different construct compared to other items. We will investigate thsi further in the next analyses.
+Item 8 (C2) shows low point-biserial correlation (p=0.024). This indicates that the item does not discriminate as well as the other items (see Discrim in the ifit table above), potentially indicating issues in the item formulation or because it could be measuring a different construct compared to other items. We will investigate this further in the next analyses.
+
+### **Person fit statistics**
+Beore proceeding we observe person fit statistics.
+
+```{r}
+pfit <- personfit(pp)
+print(pfit)
+```
+Overall, all participants show acceptable values.
+We can summarize the whole sample average Infit MSQ and percentage of people that exhibit significant misfit (z-value > 1.96).
+```{r}
+#Sample's average Infit MSQ and SD
+avg.Pmsq.infit<- round(mean(pfit$p.infitMSQ),3)
+sd.Pmsq.infit<- round(sd(pfit$p.infitMSQ),3)
+avg.Pz.infit<- round(mean(pfit$p.infitZ),3)
+sd.Pz.infit<- round(sd(pfit$p.infitZ),3)
+print(c("Sample's average MSQ infit",avg.Pmsq.infit))
+print(c("Sample's MSQ infit SD",sd.Pmsq.infit))
+print(c("Sample's average z-standardized infit",avg.Pz.infit))
+print(c("Sample's z-standardized infit SD",sd.Pz.infit))
+PersonMisfit(pp)
+```
+
 
 ## **2. Rasch model testing**
-Now that we have individuated the items that constitute our model, we check for one-dimensionality, independence, differential item functioning etc.
+Now that we have individuated the items that constitute our model, we check for one-dimensionality, independence and differential item functioning.
 
 ### **One-dimensionality check**
-#### **Principal component analysis**
+#### *Principal component analysis*
 The Rasch model is based on the assumption of unidimensionality, meaning that all items are measuring the same construct. If the residuals show consistent patterns (expressed as the first component explaining a lot of variance), it suggests that there may be additional dimensions, or structure that is not captured by the Rasch model.
 
 ```{r error=FALSE, warning=FALSE, message=FALSE}
@@ -150,21 +247,27 @@ plot(contrasts, ylab = "Eigenvalues for Contrasts", xlab = "Contrast Number", ma
 
 We observe that the first component exceeds the threshold of 2, possibly indicating *multidimensionality*.
 
-#### **Martin-Loef Likelihood Ratio Test**
+#### *Martin-Loef Likelihood Ratio Test*
 We follow up the previous analysis with the ML test for unidimensionality.
 
 ```{r}
 #ML using median-split criterion.
-ML<- NPtest (rmat, method = "MLoef")
+ML<- NPtest (rmat, method = "MLoef", seed= 123)
 print(ML)
 ```
 The analysis yields a non significant exact p-value strongly indicating unidimensionality among items.
+
+#### *Tmd Test*
+```{r}
+Tmd<-NPtest (rmat, method = "MLoef", seed= 123)
+print(Tmd)
+```
 
 ### **Tests for local (in)dependence**
 #### *Test for local dependence (T1)*
 This method checks for local dependence via increased inter-item correlations by considering all possible item pairs and counting cases with equal responses to both items. 
 ```{r}
-t1<- NPtest(rmat, n=500, method ="T1")
+t1<- NPtest(rmat, n=500, method ="T1", seed=123)
 print(t1, alpha = 0.01)
 ```
 
@@ -173,28 +276,29 @@ Using 500 bootstrap samples, the analysis revealed that items 4 and 5 showed sig
 #### *Test for local stochastic independence (T11)*
 This method calculates the sum of absolute deviations between the observed inter-item correlations and the expected correlations.
 ```{r}
-t11<- NPtest(rmat, n=500, method ="T11")
+t11<- NPtest(rmat, n=500, method ="T11", seed=123)
 print(t11, alpha = 0.01)
 ```
 The non significant p-value indicates that the independence assumption is met.
 
 ### **Differential item functioning (DIF)/Subgroup homogeneity**
-Differential Item Functioning (DIF) occurs when an item on a test behaves differently for different groups of respondents who have the same underlying ability level. In other words, a test item shows DIF if individuals from different subgroups (e.g., gender, age, ethnicity) have different probabilities of answering the item "correctly", even though they have the same overall ability according to the construct being measured.
+Differential Item Functioning (DIF) occurs when an item on a test behaves differently for different groups of respondents who have the same underlying ability level. In other words, a test item shows DIF if individuals from different subgroups (e.g., gender or age) have different probabilities of answering the item "correctly", even though they have the same overall ability according to the construct being measured.
 
 First we create two factors for gender in order to split the sample in males and females.
 ```{r}
 #create two factors for gender
-gender<- as.factor(dati$Sex)
+data.1 <- data[-pp[["pers.ex"]],]
+gender<- as.factor(data.1$Sex)
 levels(gender) <- c("male","female")
 ```
 
 #### *Ponocny's test for subgroup invariance (T10)*
-Non-parametric global test for subgroup-invariance. Checks for different item difficulties in two subgroups.
+Non-parametric global test for subgroup invariance. Checks for different item difficulties in two subgroups.
 
 ##### <u>Median as split criterion</u>
-First we check for different item difficutlties dividing the sample in high and low performers on the latent variable
+First we check for different item difficutlties dividing the sample in high and low performers on the latent variable.
 ```{r}
-t10<- NPtest(rmat, n=500, method ="T10", splitcr="median")
+t10<- NPtest(rmat, n=500, method ="T10", splitcr="median", seed=123)
 print(t10, alpha= 0.01)
 ```
 
@@ -202,8 +306,7 @@ print(t10, alpha= 0.01)
 ##### <u>Gender as split criterion</u>
 Then, we check for different items difficulties in males and females. 
 ```{r}
-rmat.1<- as.matrix (dati[3,])
-t10.1<- NPtest(rmat, n=500, method ="T10", splitcr=gender)
+t10.1<- NPtest(rmat, n=500, method ="T10", splitcr=gender, seed=123)
 print(t10.1, alpha= 0.01)
 
 ```
@@ -220,7 +323,9 @@ print(lr)
 
 ##### <u>Gender split</u>
 ```{r}
-lr.1 <- LRtest (RaschModel, splitcr = gender, se=T)
+gender.1<- as.factor(data$Sex)
+levels(gender.1) <- c("male", "female")
+lr.1 <- LRtest (RaschModel, splitcr = gender.1, se=T)
 print(lr.1)
 ```
 The non-significant p-values indicate that the model fits equally well for all subgroups.
@@ -234,14 +339,14 @@ lr <- LRtest (RaschModel, se=T)
 difplot <-plotGOF(lr, conf = list())
 ```
 
-Item 7 seems to not touch the diagonal.
+Item C1 seems to not touch the diagonal.
 
 ##### <u>Plot split by gender</u>
 ```{r}
 difplot <-plotGOF(lr.1, conf = list())
 ```
 
-Item 6 seems to be more difficult for females than for males, while the opposite seems true for item 8.
+Item B3 seems to be more difficult for females than for males, while the opposite seems true for item C2.
 
 #### *Wald's test for single items*
 To quantify the conclusions drawn from the plots for single items.
@@ -252,7 +357,7 @@ wt <- Waldtest(RaschModel, splitcr="median")
 print(wt)
 ```
 
-As suggested by the graphical representation, item 7 is significant on the Wald test, indicating that it behaves differently for participants with lower raw scores compared to those with higher scores. This suggests differential item functioning (DIF), meaning that the item may discriminate participants' abilities differently across these subgroups, potentially impacting the fairness and validity of the test for certain participants.
+As suggested by the graphical representation, item C1 is significant (p=0.02) on the Wald test, indicating that it behaves differently for participants with lower raw scores compared to those with higher scores. This suggests differential item functioning (DIF), meaning that the item may discriminate participants' abilities differently across these subgroups, potentially impacting the fairness and validity of the test for certain participants.
 To understand whether the DIF of this item is negligible we compare item difficulty in the two subgroups.
 
 ```{r}
@@ -262,11 +367,11 @@ The comparison results in a large logit difference.
 
 ##### <u>Wald test using gender split</u>
 ```{r}
-wt.1 <- Waldtest(RaschModel, splitcr=gender)
+wt.1 <- Waldtest(RaschModel, splitcr=gender.1)
 print(wt.1)
 ```
 
-Similarly, items 6 and 8 are also significant, indicating that males and females are not responding to the item in the same way.
+Similarly, items B3 and C2 are also significant, indicating that males and females are not responding to the items in the same way.
 
 ```{r}
 print(wt.1$betapar1[6]*(-1) - wt.1$betapar2[6]*(-1))
@@ -277,18 +382,17 @@ The logit differences in item difficulties is consistent for the two subgroups.
 ### **Model Reliability**
 Reliability is expressed as the quotient of true variance over observed variance and shows the level of reproducibility of the measures. The method used for estimating the true variance will produce different reliability indexes.
 
-#### **KR-20**
+#### *KR-20*
 This test (Kuder and Richardson 1937) is a special case of Cronbach's alpha for dichotomous responses and based on raw score data.
 
 ```{r}
-#remotes::install_github("cddesja/validateR")  #get package from github
-library(validateR)
-kr<- round(validateR::kr20(items),2)
-print(kr)
+#Find KR-20 using the alpha function of psych, if the matrix is dichotomous it returns the KR-20 value
+kr20<-alpha(rmat)
+round(kr20$total$raw_al,2)
 ```
-The KR-20 value of 0.85 indicates a good level of internal consistency. Therefore, the scale can be considered to reliably estimate the latent variable across participants.
+The KR-20 value of 0.74 indicates a good level of internal consistency. Therefore, the scale can be considered to reliably estimate the latent variable across participants.
 
-#### **Person separation reliability**
+#### *Person separation reliability*
 Similar to KR-20 but based on variance of peoples' abilities
 
 ```{r}
@@ -298,49 +402,51 @@ print(pers_rel)
 
 The person separation reliability of 0.69 indicates moderate reliability, meaning that the scale can distinguish between at least two levels of general ability on the latent scale, while further refinement of items and additional items may be needed to improve measurement precision.
 
-#### **Item separation reliability**
+#### *Item separation reliability*
 Based on the variance of item difficulties
 ```{r}
-#the eRm package doesn't have a built in function to calculate this, so we do this by hand.
-#First we obtain item difficulties 
-item_diff<- round(RaschModel$betapar*(-1),3) #betapar is the item easiness; inverting it by *(-1) results in item difficulty.
-#Then we need items standard error
-item_se <- round(RaschModel$se.beta,3)
-
+#We obtained Betas and Standard errors before
 #Then we can calculate Item separation reliability
 item_rel <- round( (var(item_diff, na.rm=T) - sum((item_se)^2, na.rm=T) / sum(!is.na(item_se)))/var(item_diff, na.rm=T) ,2)
 print(item_rel)
 ```
 Similarly, the item separation reliability 0f 0.72 indicates a moderate reliability. This means that the test can differentiate items across a reasonable difficulty range but may not cover the entire spectrum of difficulty.
 
-#### **Item Characteristic Curves**
+#### *Item Characteristic Curves*
 Item characteristic curves represent the probability of engaging in a certain behavior as a function of the position of individuals on the estimated latent trait.
 
 ```{r}
-joint_ICC.1<-plotjointICC(RaschModel,item.subset = 1:3, xlab = "Latent dimension", ylab="Probability to engage", legend=TRUE, legpos= "topleft", main= "ICC plot for Identity items")
-joint_ICC.2<-plotjointICC(RaschModel,item.subset = 4:6, xlab = "Latent dimension", ylab="Probability to engage", legend=TRUE, legpos= "topleft", main= "ICC plot for Worrying items")
-joint_ICC.3<-plotjointICC(RaschModel,item.subset = 7:8, xlab = "Latent dimension", ylab="Probability to engage", legend=TRUE, legpos= "topleft", main= "ICC plot for Visiting items")
-joint_ICC.4<-plotjointICC(RaschModel,item.subset = 9:11, xlab = "Latent dimension", ylab="Probability to engage", legend=TRUE, legpos= "topleft", main= "ICC plot for Personal relationship items")
+joint_ICC.1<-plotjointICC(RaschModel,item.subset = 1:3, xlab = "Latent dimension", ylab="Probability to engage", legend=TRUE, legpos= "topleft", main= "ICC plot for Group A items")
+joint_ICC.2<-plotjointICC(RaschModel,item.subset = 4:6, xlab = "Latent dimension", ylab="Probability to engage", legend=TRUE, legpos= "topleft", main= "ICC plot for Group B items")
+joint_ICC.3<-plotjointICC(RaschModel,item.subset = 7:8, xlab = "Latent dimension", ylab="Probability to engage", legend=TRUE, legpos= "topleft", main= "ICC plot for Group C items")
+joint_ICC.4<-plotjointICC(RaschModel,item.subset = 9:11, xlab = "Latent dimension", ylab="Probability to engage", legend=TRUE, legpos= "topleft", main= "ICC plot for Group D items")
 
 ```
 
-#### **Person-Item map**
+#### *Person-Item map*
 Person-item maps are useful to compare the range and position of the item measure distribution in ascending order of difficulty (lower panel) to the range and position of the person measure distribution (upper panel). Items should ideally be located along the whole scale to meaningfully measure the ‘ability’ of all persons (Bond and Fox, 2007)
 
 ```{r}
 pi_map<- plotPImap(RaschModel, main= "Person-Item Map", pplabel ="Person\nParameter\nDistribution",warn.ord=T,sorted = T)
 ```
 
-Overall, the items are well distributed on the latent dimension without significant gaps and targeting all individuals. Two couples of items seem to be overlapping indicating that they share item difficulty.
+Overall, the items are well distributed on the latent dimension without significant gaps and targeting all individuals. Two couples of items seem to be overlapping indicating that they share item difficulty. However, items do not cover all the logit range, thus items are not tailored to estimate participants with lower and higher caring attitude levels.
 
-#### **Person estimates distribution**
+To better quantify the gaps in item difficulties:
+```{r}
+#Obtain item difficulty by inverting betapar (representing easiness) and order from easiest to most difficult
+RaschModel$betapar[order(RaschModel$betapar*(-1))]
+```
+
+
+#### *Person estimates distribution*
 This graph shows the histogram of person parameter (theta) representing the distribution of the estimated caring attitude latent trait.
 
 ```{r error=FALSE, warning=FALSE, message=FALSE}
 library(ggplot2)
-
-caring.est<- pp$theta.table$`Person Parameter`
-hist_plot<- ggplot(pp$theta.table, aes(x= caring.est)) + 
+#extract caring estimate keeping only persons used for model estimation (exclude zero and perfect responses)
+caring.est<- pp$theta.table$`Person Parameter`[pp$theta.table$Interpolated == FALSE]
+hist_plot<- ggplot(pp$theta.table[pp$theta.table$Interpolated == FALSE,], aes(x= caring.est)) + 
   geom_histogram(aes(y = ..density..),
                  colour = 1, fill = "#368CF9", bins = 10) +
   geom_density(colour= "#F636F9")+
@@ -351,7 +457,7 @@ hist_plot<- ggplot(pp$theta.table, aes(x= caring.est)) +
 print(hist_plot)
 ```
 
-##### **Normality check**
+##### *Normality check*
 After visually inspecting the distribution we want to assess whether it is normally distributed. Indeed, the distribution of the observed latent trait in the sample is assumed to follow a Gaussian distribution. Deviations from the normal distribution would indicate that estimates are biased.
 
 
@@ -369,15 +475,17 @@ print(shapiro_test_result)
 
 ```
 
-Overall the estimated Theta distribution of the sample fits a normal distribution of Mean= 0.16 and SD= 1.84.
+Overall the estimated Theta distribution of the sample fits a normal distribution of Mean= 0.03 and SD= 1.4.
 
-#### **Concurrent validity**
+### **Concurrent validity**
 We can now test how the estimated level of caring relates to other variables, measured with other scales.
-For example, we can compare caring attitute with different aspects of the arts interest scale; namely, art experrience, art activities and art recognition. While we can expect an overall positive relationship between caring attitude and all dimensions of art interests I hypothesize art experience and art activities to show a stronger relationship with caring attitude compared to art recognition. We test this by running both correlation and a multiple regression analyses.
+For example, we can compare caring attitude with different aspects of the arts interest scale; namely, art experience, art activities and art recognition. While we can expect an overall positive relationship between caring attitude and all dimensions of art interests I hypothesize art experience and art activities to show a stronger relationship with caring attitude compared to art recognition. We test this by running both correlation and multiple regression analyses.
 
-```{r}
+```{r message=FALSE}
 #Create a matrix containing the CH estimate and the other scales we want to correlate
-merged_matrix<- as.matrix(data.frame(caring.est,dati$Avg_Art_Exp,dati$Avg_Art_Act,dati$Avg_Art_Recog))
+#This time we include the CH estimate for all people, including poor scorers and perfect scorers.
+caring.est<- pp$theta.table$`Person Parameter` 
+merged_matrix<- as.matrix(data.frame(caring.est,data$Avg_Art_Exp,data$Avg_Art_Act,data$Avg_Art_Recog))
 #View correlation matrix
 library(Hmisc)
 # Compute the correlation matrix along with p-values and the number of observations
@@ -390,7 +498,7 @@ All three dimensions of the artistic interest dimensions show moderate significa
 We can now test the extent to which the different artistic experience dimensions linearly predict caring attitude using a multiple regression model.
 ```{r}
 # Fit a multiple linear regression model
-multiple_model <- lm(caring.est ~ dati$Avg_Art_Exp + dati$Avg_Art_Act + dati$Avg_Art_Recog)
+multiple_model <- lm(caring.est ~ data$Avg_Art_Exp + data$Avg_Art_Act + data$Avg_Art_Recog)
 
 # View the summary of the model to understand the contribution of each predictor
 print(summary(multiple_model))
@@ -401,42 +509,22 @@ Notably, art experience is the only significant predictor of caring attitude. In
 As expected, art recognition does not linearly predict caring attitude.
 Overall, the model explains 44.89% of the variance (moderate).
 
-```{r}
-# Scatter plot with Avg_Art_Exp
-plot(dati$Avg_Art_Exp, caring.est, 
-     main = "Avg Art Experience vs Caring Estimate", 
-     xlab = "Avg Art Experience", 
-     ylab = "Caring Estimate")
-# Add regression line
-abline(lm(caring.est ~ dati$Avg_Art_Exp), col = "blue", lwd = 2)
+Before continuing we check whether assumptions are met.
 
-# Scatter plot with Avg_Art_Act
-plot(dati$Avg_Art_Act, caring.est, 
-     main = "Avg Art Activity vs Caring Estimate", 
-     xlab = "Avg Art Activity", 
-     ylab = "Caring Estimate")
-# Add regression line
-abline(lm(caring.est ~ dati$Avg_Art_Act), col = "red", lwd = 2)
-
-# Scatter plot with Avg_Art_Recog
-plot(dati$Avg_Art_Recog, caring.est, 
-     main = "Avg Art Recognition vs Caring Estimate", 
-     xlab = "Avg Art Recognition", 
-     ylab = "Caring Estimate")
-# Add regression line
-abline(lm(caring.est ~ dati$Avg_Art_Recog), col = "green", lwd = 2)
-
+```{r message=FALSE}
+library(rempsyc)
+print(nice_assumptions(multiple_model))
 ```
-
+All assumptions are met.
 
 ## **3. Conclusion**
 
-The proposed 11-item Caring Attitude Scale demonstrates good reliability, with a KR-20 value of 0.85 and moderate person (0.69) and item (0.71) separation reliabilities, suggesting the potential for future item improvement. PCA results indicate the presence of a dominant first component (eigenvalue > 2), hinting at potential multidimensionality. However, the non-significant Martin-Löf test provides strong evidence of unidimensionality across the items.
+The proposed 11-item Caring Attitude Scale demonstrates good reliability, with a KR-20 value of 0.74 and moderate person (0.69) and item (0.72) separation reliabilities, suggesting that items may be improved in future versions. The PCA on residuals indicates the presence of a dominant first component (eigenvalue > 2), suggesting potential multidimensionality. However, the non-significant Martin-Löf test provides strong evidence of unidimensionality across the items.
 
-While items 4 and 5 exhibit significant local dependence, the overall item set maintains local stochastic independence. Furthermore, item difficulties do not vary significantly between subgroups, as shown by both Pocony’s and Andersen’s LR tests, when comparing responses based on a median split criterion or by gender. Despite this, some items show evidence of differential item functioning (DIF), suggesting that individual differences and gender may influence individual tendencies towards cultural heritage caring.
+While items B1 and B2 exhibit significant local dependence, the overall item set maintains local stochastic independence. Furthermore, item difficulties do not vary significantly between subgroups, as shown by both Ponocny’s and Andersen’s LR tests, when comparing responses based on a median split criterion or by gender. Despite this, some items show evidence of differential item functioning (DIF), suggesting that individual differences and gender may influence individual tendencies towards cultural heritage caring.
 
 Notably, all the items asking about how much time and money people devote to cultural heritage caring were excluded given their elevated difficulty which was reflected in poor fit statistics. Specifically, this could be due to the age range of the sample, mainly composed of very young adults, for which asking about their dedication to CH based on money investment appears to be inappropriate.
 
 The scale shows moderate correlations with the three artistic dimensions—art experience, art activity, and art recognition indicating a relationship between caring and these factors. However, among these, only art experience emerges as a significant predictor of caring. This finding is consistent with the theoretical framework of the scale, as art experience (i.e., personal involvement and engagement with art) is more likely to reflect an individual's caring attitude toward cultural heritage.
 While art recognition may correlate with caring, it theoretically has little direct impact on caring attitudes, reinforcing the idea that the scale is capturing the most relevant aspects.
-Overall, the results provide evidence for the concurrent validity of the caring scale, with the strongest support coming from its relationship with art experience
+Overall, the results provide evidence for the concurrent validity of the caring scale, with the strongest support coming from its relationship with art experience.
